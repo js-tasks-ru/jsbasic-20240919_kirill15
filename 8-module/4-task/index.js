@@ -5,31 +5,77 @@ import Modal from '../../7-module/2-task/index.js';
 
 export default class Cart {
   cartItems = []; // [product: {...}, count: N]
+  modal = null;
+  
+  
+
 
   constructor(cartIcon) {
     this.cartIcon = cartIcon;
-
     this.addEventListeners();
   }
 
-  addProduct(product) {
-    // СКОПИРУЙТЕ СЮДЯ СВОЙ КОД
+  addProduct(product) { 
+
+     if (!product) {
+      return
+    };
+    
+    let cartItem = this.cartItems.find(item => item.id === product.id)
+      if(!cartItem) { 
+        this.cartItems.push({
+           name: product.name,
+           price: product.price,
+           category: product.category,
+          image: product.image,
+          id: product.id,
+          count: 1
+        })
+      }
+      else { 
+        cartItem.count++;
+      }
+      this.onProductUpdate(cartItem);
   }
 
-  updateProductCount(productId, amount) {
-    // СКОПИРУЙТЕ СЮДЯ СВОЙ КОД
+
+  updateProductCount(productId, amount) { 
+    const cartItem = this.cartItems.find(item => item.id === productId);
+
+    if (!cartItem) {
+      return;
+    }
+    
+    cartItem.count += amount;
+    
+    if (cartItem.count === 0) {
+      this.cartItems = this.cartItems.filter(item => item.id  !== productId);
+      this.onProductUpdate(null);
+    }
+    this.onProductUpdate(cartItem);
   }
 
-  isEmpty() {
-    // СКОПИРУЙТЕ СЮДЯ СВОЙ КОД
+  isEmpty() { 
+    return this.cartItems.length === 0;
   }
 
   getTotalCount() {
-    // СКОПИРУЙТЕ СЮДЯ СВОЙ КОД
+    let totalCount = 0;
+    for (let i = 0; i < this.cartItems.length; i++) { 
+      const item = this.cartItems[i].count;
+      totalCount = totalCount + item;
+    }
+    return totalCount;
   }
 
+  
   getTotalPrice() {
-    // СКОПИРУЙТЕ СЮДЯ СВОЙ КОД
+    let totalPrice = 0;
+    for (let i = 0; i < this.cartItems.length; i++) {
+      const item = this.cartItems[i];
+      totalPrice += item.count * item.price;
+    }
+    return totalPrice;
   }
 
   renderProduct(product, count) {
@@ -83,22 +129,155 @@ export default class Cart {
     </form>`);
   }
 
-  renderModal() {
-    // ...ваш код
+
+renderModal() {
+  if (this.modal) {
+    this.modal.close();
+  }
+  this.modal = new Modal();
+  this.modal.setTitle('Your order');
+
+  const modalBody = document.createElement('div');
+
+  // Сначала добавляем товары
+  for (const cartItem of this.cartItems) {
+    const productCard = this.renderProduct(cartItem, cartItem.count);
+    modalBody.appendChild(productCard);
   }
 
-  onProductUpdate(cartItem) {
-    // ...ваш код
+  
+  const orderForm = this.renderOrderForm();
+  modalBody.appendChild(orderForm);
+
+  
+  this.modal.setBody(modalBody);
+  this.modal.open();
+
+  
+  const container = document.querySelector('.modal__body'); 
+
+  const plusButtons = container.querySelectorAll('.cart-counter__button_plus');
+  const minusButtons = container.querySelectorAll('.cart-counter__button_minus');
+
+  for (const button of plusButtons) {
+    button.addEventListener('click', () => {
+      const productCard = button.closest('.cart-product');
+      const productId = productCard.dataset.productId;
+      this.updateProductCount(productId, 1);
+    });
+  }
+
+  for (const button of minusButtons) {
+    button.addEventListener('click', () => {
+      const productCard = button.closest('.cart-product');
+      const productId = productCard.dataset.productId;
+      this.updateProductCount(productId, -1);
+    });
+  }
+
+  const cartForm = container.querySelector('.cart-form');
+  if (cartForm) {
+    cartForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      this.onSubmit(event);
+    });
+  }
+}
+
+
+onProductUpdate(cartItem) {
+  if (!cartItem || !cartItem.id) {
+    if (document.body.classList.contains('is-modal-open')) {
+      const modalBody = document.querySelector('.modal__body');
+      let infoPrice = null;
+
+      if (modalBody) {
+        infoPrice = modalBody.querySelector('.cart-buttons__info-price');
+      }
+
+      if (infoPrice) {
+        infoPrice.textContent = `€${this.getTotalPrice().toFixed(2)}`;
+      }
+    }
+
+   
+    if (this.isEmpty() && this.modal) {
+      this.modal.close();
+      this.modal = null;
+    }
 
     this.cartIcon.update(this);
+    return;
   }
 
-  onSubmit(event) {
-    // ...ваш код
+  
+  if (document.body.classList.contains('is-modal-open')) {
+    const productId = cartItem.id;
+    const modalBody = document.querySelector('.modal__body');
+
+    let productCount = null;
+    let productPrice = null;
+
+    if (modalBody) {
+      productCount = modalBody.querySelector(`[data-product-id="${productId}"] .cart-counter__count`);
+      productPrice = modalBody.querySelector(`[data-product-id="${productId}"] .cart-product__price`);
+    }
+
+    const infoPrice = document.querySelector('.cart-buttons__info-price');
+
+    if (productPrice) {
+      productPrice.textContent = `€${(cartItem.price * cartItem.count).toFixed(2)}`;
+    }
+    if (infoPrice) {
+      infoPrice.textContent = `€${this.getTotalPrice().toFixed(2)}`;
+    }
+    if (productCount) {
+      productCount.textContent = cartItem.count;
+    }
+  }
+
+  this.cartIcon.update(this);
+}
+
+
+  
+
+onSubmit(event) {
+    event.preventDefault();
+    let submitButton = document.querySelector('[type="submit"]');
+    submitButton.classList.add('is-loading');
+    let form = document.querySelector('.cart-form')
+
+    fetch('https://httpbin.org/post', {
+      method: "POST",
+      body: new FormData(form)
+    }).then((response) => {
+      if (response.ok) {
+        this.modal.setTitle('Success!');
+        this.cartItems = [];
+        this.cartIcon.update(this);
+        this.modal.setBody(createElement(`
+          <div class="modal__body-inner">
+            <p>
+              Order successful! Your order is being cooked :) <br>
+              We’ll notify you about delivery time shortly.<br>
+              <img src="/assets/images/delivery.gif">
+            </p>
+          </div>
+        `));
+      };})
   };
+
+  
+
+  
+
 
   addEventListeners() {
     this.cartIcon.elem.onclick = () => this.renderModal();
   }
+
 }
+
+
 

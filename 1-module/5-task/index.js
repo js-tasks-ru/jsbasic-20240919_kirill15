@@ -6,3 +6,5 @@ if (str.length > maxlength){
 }
 }
 
+console.log(truncate('Вот, что мне хотелось бы сказать на эту тему:', 20))
+
